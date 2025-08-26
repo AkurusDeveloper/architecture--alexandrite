@@ -1,0 +1,68 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Customer", "Покупатель, оформляет заказ в интернет-магазине")
+Person(seller, "Seller", "Продавец, работает в CRM, подтверждает заказ")
+Person(apiuser, "API User", "Партнёрский API клиент")
+Person(operator, "Operator", "Оператор, работает в MES")
+
+System_Boundary(alexandrite, "Jewelry Store System") {
+
+  Container(shopUI, "Internet Shop", "Vue, TypeScript, Three.js", "UI для оформления заказов и 3D моделей")
+  Container(shopAPI, "Shop API", "SpringBoot", "Принимает заказы, обрабатывает 3D файлы, сохраняет данные")
+  ContainerDb(shopDB, "Shop DB", "PostgreSQL", "Хранит заказы и пользователей")
+
+  Container(crmUI, "CRM", "Vue, TypeScript", "Интерфейс продавцов")
+  Container(crmAPI, "CRM API", "SpringBoot", "Управление заказами и подтверждения")
+
+  Container(mesUI, "MES", "React, TypeScript", "UI для операторов")
+  Container(mesAPI, "MES API", "C#", "Рассчитывает стоимость, назначает заказы")
+  ContainerDb(mesDB, "MES DB", "PostgreSQL", "Хранит заказы и статусы MES")
+
+  Container(files, "3D Files Storage", "S3", "Хранит загруженные 3D модели")
+  ContainerDb(queue, "Messages Queue", "RabbitMQ", "Сообщения о заказах и статусах")
+
+  ' --- Трейсинг (красные элементы) ---
+  Container_Ext(otel, "Tracing Collector", "OpenTelemetry", "Собирает трассы из сервисов") #red
+  Container_Ext(tracing, "Tracing Storage & UI", "Jaeger/Tempo", "Хранение и визуализация трейсинга") #red
+
+  ' --- Алертинг (зелёные элементы) ---
+  Container_Ext(alerts, "Alertmanager", "Prometheus Alertmanager", "Алертинг по данным трейсинга/метрик") #green
+}
+
+Rel(customer, shopUI, "Оформляет заказ")
+Rel(shopUI, shopAPI, "HTTP")
+Rel(shopAPI, shopDB, "SQL")
+Rel(shopAPI, files, "загрузка 3D")
+Rel(shopAPI, queue, "сообщения о заказах")
+
+Rel(seller, crmUI, "Работает через")
+Rel(crmUI, crmAPI, "HTTP")
+Rel(crmAPI, shopDB, "SQL")
+Rel(crmAPI, queue, "сообщения о статусах")
+
+Rel(apiuser, mesAPI, "Использует API")
+Rel(operator, mesUI, "Работает через")
+Rel(mesUI, mesAPI, "HTTP")
+Rel(mesAPI, mesDB, "SQL")
+Rel(mesAPI, files, "Доступ к моделям")
+Rel(mesAPI, queue, "Сообщения")
+
+' --- Интеграция с трейсингом ---
+Rel(shopAPI, otel, "Отправляет трейсы") #red
+Rel(crmAPI, otel, "Отправляет трейсы") #red
+Rel(mesAPI, otel, "Отправляет трейсы") #red
+Rel(queue, otel, "Метрики и трейсы") #red
+Rel(shopDB, otel, "Query-трейсы") #red
+Rel(mesDB, otel, "Query-трейсы") #red
+Rel(files, otel, "Latency трейсы") #red
+
+Rel(otel, tracing, "Отправка трейсинга") #red
+
+' --- Интеграция с алертингом ---
+Rel(otel, alerts, "Метрики/события для алертов") #green
+Rel(alerts, operator, "Оповещения DevOps/поддержки") #green
+
+@enduml
