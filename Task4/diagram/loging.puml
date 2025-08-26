@@ -1,0 +1,66 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Customer", "Покупатель")
+Person(apiuser, "API User", "Партнёрский клиент")
+Person(seller, "Seller", "Продавец (CRM)")
+Person(operator, "Operator", "Оператор (MES)")
+
+System_Boundary(alexandrite, "Jewelry Store System") {
+
+  Container(shopUI, "Internet Shop", "Vue/TS", "UI для покупателей")
+  Container(shopAPI, "Shop API", "SpringBoot", "Приём заказов, загрузка 3D")
+  ContainerDb(shopDB, "Shop DB", "PostgreSQL", "Хранение заказов и пользователей")
+
+  Container(crmUI, "CRM UI", "Vue/TS", "Интерфейс продавцов")
+  Container(crmAPI, "CRM API", "SpringBoot", "Управление заказами, подтверждения")
+
+  Container(mesUI, "MES UI", "React/TS", "UI операторов")
+  Container(mesAPI, "MES API", "C#", "Рассчёт стоимости, производство")
+  ContainerDb(mesDB, "MES DB", "PostgreSQL", "Статусы заказов в MES")
+
+  Container(files, "3D Files Storage", "S3", "Хранение 3D моделей")
+  Container(queue, "Message Queue", "RabbitMQ", "Обмен событиями между системами")
+
+  ' --- Новые компоненты логирования ---
+  Container_Ext(logCollector, "Log Collector", "Fluentd/Filebeat", "Сбор логов со всех сервисов") #red
+  Container_Ext(logStorage, "Log Storage", "OpenSearch/ELK", "Централизованное хранение логов") #red
+  Container_Ext(logUI, "Log UI", "Kibana/Grafana", "Поиск и анализ логов") #red
+}
+
+' --- связи пользователей ---
+Rel(customer, shopUI, "Оформляет заказ")
+Rel(apiuser, shopAPI, "Взаимодействует с API")
+Rel(seller, crmUI, "Работает в")
+Rel(operator, mesUI, "Работает в")
+
+' --- связи систем ---
+Rel(shopUI, shopAPI, "HTTP")
+Rel(shopAPI, shopDB, "SQL")
+Rel(shopAPI, files, "Загрузка 3D")
+Rel(shopAPI, queue, "Сообщения")
+
+Rel(crmUI, crmAPI, "HTTP")
+Rel(crmAPI, shopDB, "SQL")
+Rel(crmAPI, queue, "Сообщения")
+
+Rel(mesUI, mesAPI, "HTTP")
+Rel(mesAPI, mesDB, "SQL")
+Rel(mesAPI, files, "Доступ к 3D")
+Rel(mesAPI, queue, "Сообщения")
+
+' --- связи с логированием ---
+Rel(shopAPI, logCollector, "Отправляет логи") #red
+Rel(crmAPI, logCollector, "Отправляет логи") #red
+Rel(mesAPI, logCollector, "Отправляет логи") #red
+Rel(queue, logCollector, "Ошибки очередей") #red
+Rel(shopDB, logCollector, "Ошибки/медленные запросы") #red
+Rel(mesDB, logCollector, "Ошибки/медленные запросы") #red
+Rel(files, logCollector, "Ошибки загрузки/скачивания") #red
+
+Rel(logCollector, logStorage, "Передача логов") #red
+Rel(logStorage, logUI, "Визуализация, поиск") #red
+
+@enduml
